@@ -3,6 +3,12 @@ build/
 *.tfstate
 *.tfstate.*
 *.tfvars
+.env
+.env.*
+*.pem
+*.key
+*.zip
+Thumbs.db
 crash.log
 crash.*.log
 override.tf
