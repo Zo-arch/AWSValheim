@@ -1,0 +1,9 @@
+project_name             = "valheim-discord"
+aws_region               = "sa-east-1"
+instance_type            = "t3.large"
+root_volume_size_gb      = 30
+discord_application_id   = "000000000000000000"
+discord_public_key       = "hex_public_key_from_discord_developer_portal"
+discord_guild_id         = "000000000000000000"
+discord_allowed_role_id  = "000000000000000000"
+valheim_udp_cidr_blocks  = ["0.0.0.0/0"]
