@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Valheim Control</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Painel privado</p>
+          <h1>Valheim Control</h1>
+        </div>
+        <div class="state-pill" id="statePill">bloqueado</div>
+      </section>
+
+      <section class="control-band">
+        <label class="password-field">
+          <span>Senha</span>
+          <input id="passwordInput" type="password" autocomplete="current-password" placeholder="senha do painel">
+        </label>
+        <button id="unlockButton" type="button">Entrar</button>
+        <button id="startButton" type="button" disabled>Ligar</button>
+        <button id="stopButton" type="button" disabled>Backup + parar</button>
+      </section>
+
+      <section class="status-grid">
+        <article class="metric metric-wide">
+          <span>Endereco</span>
+          <strong id="serverAddress">-</strong>
+        </article>
+        <article class="metric">
+          <span>EC2</span>
+          <strong id="serverState">-</strong>
+        </article>
+        <article class="metric">
+          <span>Operacao</span>
+          <strong id="operationState">-</strong>
+        </article>
+        <article class="metric">
+          <span>Ligado ha</span>
+          <strong id="uptime">-</strong>
+        </article>
+        <article class="metric">
+          <span>Sessao</span>
+          <strong id="sessionCost">-</strong>
+        </article>
+        <article class="metric">
+          <span>Instancia</span>
+          <strong id="instanceType">-</strong>
+        </article>
+        <article class="metric">
+          <span>Ultima checagem</span>
+          <strong id="checkedAt">-</strong>
+        </article>
+      </section>
+
+      <section class="activity">
+        <div>
+          <span>Mensagem</span>
+          <p id="message">Digite a senha para carregar o status.</p>
+        </div>
+        <div>
+          <span>Ultima atualizacao</span>
+          <p id="operationUpdatedAt">-</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "project_name" {
   description = "Name prefix used for AWS resources."
   type        = string
-  default     = "valheim-discord"
+  default     = "valheim-control"
 }
 
 variable "instance_type" {
@@ -19,7 +19,7 @@ variable "instance_type" {
 variable "root_volume_size_gb" {
   description = "Root EBS volume size in GiB."
   type        = number
-  default     = 30
+  default     = 40
 }
 
 variable "valheim_udp_cidr_blocks" {
@@ -28,29 +28,32 @@ variable "valheim_udp_cidr_blocks" {
   default     = ["0.0.0.0/0"]
 }
 
-variable "discord_application_id" {
-  description = "Discord application ID."
-  type        = string
-}
-
-variable "discord_public_key" {
-  description = "Discord application's Ed25519 public key."
+variable "control_password_hash" {
+  description = "Lowercase SHA-256 hex hash of the password used by the web control panel."
   type        = string
   sensitive   = true
 }
 
-variable "discord_guild_id" {
-  description = "Discord guild ID allowed to use the endpoint."
-  type        = string
+variable "valheim_port" {
+  description = "Valheim UDP port displayed in the control panel."
+  type        = number
+  default     = 2456
 }
 
-variable "discord_allowed_role_id" {
-  description = "Discord role ID allowed to run /valheim commands."
-  type        = string
+variable "session_hourly_usd" {
+  description = "Manual hourly USD estimate used by the control panel for the current EC2 instance type."
+  type        = number
+  default     = 0.0
 }
 
-variable "discord_command_name" {
-  description = "Top-level Discord slash command name."
-  type        = string
-  default     = "valheim"
+variable "usd_to_brl_rate" {
+  description = "Manual USD to BRL exchange rate used by the control panel estimate."
+  type        = number
+  default     = 5.5
+}
+
+variable "backup_retention_days" {
+  description = "Number of days to retain Valheim world backups in S3."
+  type        = number
+  default     = 30
 }

@@ -1,16 +1,17 @@
-# Terraform Valheim Discord
+# Terraform Valheim Control
 
-Infraestrutura Terraform para criar uma EC2 `t3.large` em `sa-east-1`, controlada por `/valheim start`, `/valheim ip` e `/valheim stop` no Discord.
+Infraestrutura Terraform para criar uma EC2 em `sa-east-1`, controlada por um painel web estatico servido por S3 Website.
 
-O Terraform cria a infraestrutura. O estado operacional da EC2 fica fora do Terraform e e controlado pela Lambda.
+O Terraform cria a infraestrutura. O estado operacional da EC2 fica fora do Terraform e e controlado pela Lambda do painel.
 
 ## O Que E Criado
 
 - EC2 Ubuntu Server 24.04 LTS usando a VPC default da regiao
 - Security group com UDP `2456-2457` aberto para Valheim e sem SSH inbound
 - IAM instance profile com `AmazonSSMManagedInstanceCore` para acesso via Session Manager
-- Lambda Function URL publica para receber interactions do Discord
-- IAM da Lambda para iniciar, parar e consultar a EC2
+- Bucket S3 para backup automatico do mundo ativo do Valheim
+- Lambda Function URL publica para a API do painel
+- S3 Website para hospedar o painel web
 
 Nao ha Elastic IP por padrao. O IPv4 publico muda depois de stop/start.
 
@@ -22,7 +23,16 @@ Copie o exemplo de variaveis:
 Copy-Item terraform.tfvars.example terraform.tfvars
 ```
 
-Edite `terraform.tfvars` com os IDs e a public key do app do Discord.
+Gere o hash SHA-256 da senha do painel:
+
+```powershell
+$password = "troque-essa-senha"
+$bytes = [Text.Encoding]::UTF8.GetBytes($password)
+$hash = [Security.Cryptography.SHA256]::HashData($bytes)
+[Convert]::ToHexString($hash).ToLower()
+```
+
+Edite `terraform.tfvars` e coloque o resultado em `control_password_hash`.
 
 Inicialize e aplique:
 
@@ -33,33 +43,23 @@ terraform validate
 terraform apply
 ```
 
-Configure o output `lambda_function_url` como Interactions Endpoint URL no Discord Developer Portal.
+Abra o output `control_site_url`. O painel pede a senha, mostra status do servidor e permite ligar ou fazer backup + parar.
 
-Registre o comando no servidor:
+## Painel Web
 
-```powershell
-.\scripts\register-discord-commands.bat
-```
+O painel mostra:
 
-Ou exporte as variaveis manualmente:
+- estado atual da EC2
+- IP publico e porta do servidor
+- ha quanto tempo a instancia esta ligada
+- estimativa de custo da sessao em USD e BRL
+- ultima mensagem da operacao
 
-```powershell
-$env:DISCORD_APPLICATION_ID="000000000000000000"
-$env:DISCORD_GUILD_ID="000000000000000000"
-$env:DISCORD_BOT_TOKEN="token_do_bot"
-$env:DISCORD_COMMAND_NAME="valheim"
-node scripts/register-discord-commands.mjs
-```
-
-## Comandos Discord
-
-- `/valheim start`: liga a EC2 e retorna o IPv4 publico novo
-- `/valheim ip`: mostra o IPv4 publico atual se a EC2 estiver rodando
-- `/valheim stop`: para a EC2
+A estimativa usa os valores manuais `session_hourly_usd` e `usd_to_brl_rate`. Se `session_hourly_usd` ficar `0`, o painel mostra `configure` no custo.
 
 ## Layout Na EC2
 
-- binarios do servidor: `/opt/valheim`
+- binarios do servidor: `/srv/valheim/server`
 - mundos: `/srv/valheim/worlds_local`
 - config do servidor: `/etc/valheim/valheim.env`
 - home/estado do usuario de servico: `/var/lib/valheim`
@@ -81,14 +81,16 @@ sudo bash install-valheim-server.sh
 O script:
 
 - instala SteamCMD e dependencias do Ubuntu
-- instala o Valheim Dedicated Server em `/opt/valheim`
+- instala `unzip` e a AWS CLI v2
+- instala o Valheim Dedicated Server em `/srv/valheim/server`
 - cria `/etc/valheim/valheim.env`
 - cria o servico `systemd` `valheim.service`
-- gera um `start-valheim.sh` que carrega BepInEx automaticamente se os arquivos de mod existirem em `/opt/valheim`
+- instala o helper `/usr/local/bin/backup-valheim-world.sh`
+- gera um `start-valheim.sh` que carrega BepInEx automaticamente se os arquivos de mod existirem em `/srv/valheim/server`
 
 ## Configurar Mundo
 
-Arquivos do mundo no Windows: veja [scripts/valheim-world-paths.md](C:/Users/Zo/Documents/GitHub/AWSValhein/scripts/valheim-world-paths.md)
+Arquivos do mundo no Windows: veja `scripts/valheim-world-paths.md`.
 
 Destino na EC2:
 
@@ -137,17 +139,82 @@ Isso gera `valheim-server-mods.zip` na Desktop com:
 - `doorstop_config.ini`
 - `start_server_bepinex.sh`
 
-Extraia o zip diretamente em `/opt/valheim` na EC2, por exemplo depois de baixar para `/tmp`:
+## Baixar Arquivos Do S3 Na EC2
+
+A EC2 tem permissao IAM para baixar objetos do bucket de backup. Dentro da instancia, liste os arquivos:
+
+```bash
+aws s3 ls s3://NOME_DO_BUCKET/ --recursive
+```
+
+Para baixar arquivos para a pasta atual:
+
+```bash
+aws s3 cp s3://NOME_DO_BUCKET/valheim-server-mods.zip .
+aws s3 cp s3://NOME_DO_BUCKET/Vultur-world-backup-20260606-053031.tar.tar .
+```
+
+Confira:
+
+```bash
+ls -lh
+```
+
+Para extrair `.zip`:
+
+```bash
+unzip -o valheim-server-mods.zip -d /srv/valheim/server
+```
+
+Para extrair `.tar`, `.tar.gz` ou backup compactado:
+
+```bash
+tar -xf Vultur-world-backup-20260606-053031.tar.tar -C /srv/valheim/worlds_local
+```
+
+Depois de extrair arquivos do servidor ou mundo, ajuste permissao:
+
+```bash
+sudo chown -R valheim:valheim /srv/valheim/server /srv/valheim/worlds_local
+```
+
+## Instalar Mods No Servidor
+
+Extraia o zip diretamente em `/srv/valheim/server` na EC2. Sempre pare o servico antes de atualizar mods e inicie novamente depois:
 
 ```bash
 sudo systemctl stop valheim
-sudo unzip /tmp/valheim-server-mods.zip -d /opt/valheim
-sudo chown -R valheim:valheim /opt/valheim/BepInEx /opt/valheim/doorstop_libs
-sudo systemctl restart valheim
+sudo unzip /tmp/valheim-server-mods.zip -d /srv/valheim/server
+sudo chown -R valheim:valheim /srv/valheim/server/BepInEx /srv/valheim/server/doorstop_libs
+sudo systemctl start valheim
 sudo systemctl status valheim
 ```
 
 Nao existe um segundo script para mods. O mesmo `start-valheim.sh` gerado pelo instalador detecta BepInEx e ativa Doorstop automaticamente.
+
+## Backups Do Mundo
+
+O projeto cria um bucket S3 dedicado para backups do mundo ativo. O botao `Backup + parar` primeiro executa backup do mundo configurado em `WORLD_NAME` e so depois para a EC2.
+
+O backup automatico usa:
+
+- helper: `/usr/local/bin/backup-valheim-world.sh`
+- origem: `/srv/valheim/worlds_local`
+- temporario local: `/tmp/valheim-backups`
+- destino S3: `s3://BACKUP_BUCKET/backups/worlds/`
+
+O helper salva somente os arquivos do mundo ativo:
+
+- `WORLD_NAME.db`
+- `WORLD_NAME.fwl`
+
+Para testar backup manualmente na EC2:
+
+```bash
+sudo BACKUP_BUCKET_NAME="NOME_DO_BUCKET" BACKUP_PREFIX="backups/worlds" /usr/local/bin/backup-valheim-world.sh
+```
+
+O nome do bucket aparece no output `backup_bucket_name` do Terraform.
 
 ## Acesso Ao Servidor
 
@@ -158,5 +225,5 @@ Nao ha porta 22 aberta.
 ## Observacoes
 
 - Esta base suporta jogo vanilla e modado com o mesmo servico `systemd`
-- `terraform destroy` remove a EC2 e pode apagar dados se nao houver backup/snapshot
-- o root EBS persiste em stop/start
+- `terraform destroy` remove a EC2 e apaga os dados locais se nao houver backup/snapshot
+- stop/start da EC2 preserva o root EBS e os arquivos em `/srv/valheim`
